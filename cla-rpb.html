@@ -1,0 +1,441 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CLA / RPB Viewer</title>
+<style>
+:root{--bg:#0f1115;--panel:#171a21;--line:#262b36;--fg:#e6e8ee;--dim:#8a91a3;--acc:#e0b35a;--good:#5fd38d;--mid:#e6c35c;--low:#e8894f;--bad:#e05a5a}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+a{color:var(--acc)}
+.wrap{max-width:1200px;margin:0 auto;padding:16px}
+header{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14px}
+header h1{font-size:18px;margin:0;letter-spacing:.5px}
+header h1 span{color:var(--acc)}
+.grow{flex:1}
+.pill{font-size:12px;color:var(--dim);border:1px solid var(--line);border-radius:99px;padding:2px 10px}
+.pill.ok{color:var(--good);border-color:#2c5a3f}
+button,select,input,textarea{font:inherit;color:var(--fg);background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:7px 10px}
+button{cursor:pointer}button:hover{border-color:var(--acc)}
+button.pri{background:var(--acc);color:#1a1405;border-color:var(--acc);font-weight:600}
+input,textarea{width:100%}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px;margin-bottom:14px}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.row>input{flex:1;min-width:220px;width:auto}
+.muted{color:var(--dim)}.small{font-size:12px}
+code{background:#0b0d11;border:1px solid var(--line);border-radius:4px;padding:1px 5px;font-size:12px;word-break:break-all}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media(max-width:760px){.grid2{grid-template-columns:1fr}}
+nav{display:flex;gap:4px;border-bottom:1px solid var(--line);margin-bottom:14px;overflow-x:auto}
+nav button{border:0;border-bottom:2px solid transparent;border-radius:0;background:none;color:var(--dim);padding:8px 14px}
+nav button.on{color:var(--fg);border-bottom-color:var(--acc)}
+.stats{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px}
+.stat{flex:1;min-width:110px;background:#12151b;border:1px solid var(--line);border-radius:8px;padding:8px 12px}
+.stat b{display:block;font-size:20px;font-variant-numeric:tabular-nums}
+.stat span{font-size:12px;color:var(--dim)}
+.tw{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+th,td{padding:6px 8px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap}
+th{font-size:12px;color:var(--dim);font-weight:600;cursor:pointer;user-select:none;position:sticky;top:0;background:var(--panel)}
+th.n,td.n{text-align:right}
+th.s::after{content:" ▾"}th.s.asc::after{content:" ▴"}
+tbody tr:hover{background:#1c2029}
+tr.click{cursor:pointer}
+tr.sub td{background:#12151b;white-space:normal}
+h3{font-size:13px;text-transform:uppercase;letter-spacing:1px;color:var(--dim);margin:18px 0 8px}
+.bar{position:relative}.bar i{position:absolute;left:0;top:3px;bottom:3px;background:rgba(224,179,90,.13);border-radius:3px;z-index:0}.bar em{position:relative;font-style:normal}
+.g{color:var(--good)}.m{color:var(--mid)}.l{color:var(--low)}.b{color:var(--bad)}.z{color:#4a5060}
+.chips{display:flex;flex-wrap:wrap;gap:4px}
+.chip{font-size:12px;border:1px solid var(--line);border-radius:4px;padding:1px 6px;background:#0b0d11}
+#msg{min-height:20px}
+.err{color:var(--bad)}
+[hidden]{display:none!important}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <h1><span>CLA</span> / RPB Viewer</h1>
+  <span class="grow"></span>
+  <span id="authPill" class="pill">not signed in</span>
+  <button id="authBtn">API access</button>
+</header>
+
+<section id="auth" class="card" hidden>
+  <p style="margin-top:0">Data comes straight from the Warcraft Logs API into this page. Your credentials and token are kept only in this browser's storage and never go anywhere else.</p>
+  <div class="grid2">
+    <div>
+      <h3 style="margin-top:0">Option A · Sign in (hosted page)</h3>
+      <p class="small muted">Create a client at <a href="https://www.warcraftlogs.com/api/clients/" target="_blank" rel="noopener">warcraftlogs.com/api/clients</a>, tick <b>Public Client</b>, and set the redirect URL to:<br><code id="redir"></code></p>
+      <p id="fileWarn" class="small l" hidden>This page is opened from disk, so sign-in can't redirect back. Host it (GitHub Pages, <code>python -m http.server</code>) or use option B.</p>
+      <div class="row"><input id="cid" placeholder="Client ID"><button class="pri" id="loginBtn">Sign in</button></div>
+    </div>
+    <div>
+      <h3 style="margin-top:0">Option B · Paste a token (works anywhere)</h3>
+      <p class="small muted">Make a normal (non-public) client, then run once:<br><code>curl -u CLIENT_ID:CLIENT_SECRET -d grant_type=client_credentials https://www.warcraftlogs.com/oauth/token</code><br>and paste the <code>access_token</code> value.</p>
+      <div class="row"><input id="tok" placeholder="access_token (or the whole JSON reply)"><button class="pri" id="tokBtn">Save</button></div>
+    </div>
+  </div>
+  <h3>Share with people who have no API access</h3>
+  <p class="small muted" style="margin-top:0">After saving an option B token, save a copy of this page with that token built in. Anyone with the copy only needs a report link. The token can read public logs only, but it is readable inside the file and uses your API allowance, so share the copy with people you trust and make a new one when it expires.</p>
+  <div class="row"><button id="bake">Save page with built-in access</button><span id="bakeNote" class="small muted"></span></div>
+  <p class="small" style="margin-bottom:0"><a href="#" id="logout">Forget my token</a></p>
+</section>
+
+<section class="card">
+  <div class="row">
+    <input id="q" placeholder="Report URL, report code, or share code">
+    <button class="pri" id="go">Load</button>
+  </div>
+  <div class="row" id="ctrl" style="margin-top:10px" hidden>
+    <select id="filter"></select>
+    <span class="grow"></span>
+    <button id="share" title="Others load the same report with their own API access">Share code</button>
+    <button id="vlink" title="Anyone can view this exact selection, no login">View-only link</button>
+    <button id="vpage" title="Download a page with this data baked in">Save view-only page</button>
+    <button id="raw">Raw JSON</button>
+  </div>
+  <div class="small muted" style="margin-top:8px">Got a view-only code? Paste it above. Got a snapshot file? <a href="#" id="openSnap">Open it</a>.<input type="file" id="snapFile" accept=".json,.cla,.txt" hidden></div>
+  <div id="msg" class="small muted" style="margin-top:8px"></div>
+</section>
+
+<div id="view" hidden>
+  <nav id="tabs">
+    <button data-t="overview" class="on">Overview</button>
+    <button data-t="players">Players</button>
+    <button data-t="consumes">Consumables</button>
+    <button data-t="deaths">Deaths</button>
+  </nav>
+  <div id="out"></div>
+</div>
+<p class="small muted">Single-file viewer for Warcraft Logs. Nothing is sent anywhere except warcraftlogs.com.</p>
+</div>
+
+<script>
+'use strict';
+const SRC='<!doctype html>\n'+document.documentElement.outerHTML.replace(/<script type="application\/json" id="(snap|cfg)">[\s\S]*?<\/script>/g,'');
+const $=s=>document.querySelector(s);
+const ls={get:k=>{try{return localStorage.getItem(k)}catch{return null}},set:(k,v)=>{try{v==null?localStorage.removeItem(k):localStorage.setItem(k,v)}catch{}}};
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const b64u=b=>{let s='';for(let i=0;i<b.length;i+=0x8000)s+=String.fromCharCode.apply(null,b.subarray(i,i+0x8000));return btoa(s).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'')};
+const unb64u=s=>Uint8Array.from(atob(s.replace(/-/g,'+').replace(/_/g,'/')),c=>c.charCodeAt(0));
+async function pack(o){const st=new Blob([JSON.stringify(o)]).stream().pipeThrough(new CompressionStream('deflate-raw'));return 'CLA2.'+b64u(new Uint8Array(await new Response(st).arrayBuffer()))}
+async function unpack(c){const st=new Blob([unb64u(c.trim().slice(5))]).stream().pipeThrough(new DecompressionStream('deflate-raw'));return JSON.parse(await new Response(st).text())}
+const fmt=n=>{n=+n||0;const a=Math.abs(n);return a>=1e6?(n/1e6).toFixed(2)+'M':a>=1e4?(n/1e3).toFixed(1)+'k':Math.round(n).toLocaleString('en')};
+const dur=ms=>{const s=Math.round(ms/1000);return Math.floor(s/60)+':'+String(s%60).padStart(2,'0')};
+const pct=x=>(x*100).toFixed(0)+'%';
+const msg=(t,err)=>{const m=$('#msg');m.textContent=t||'';m.className='small '+(err?'err':'muted')};
+const CLS={Warrior:'#C69B6D',Paladin:'#F48CBA',Hunter:'#AAD372',Rogue:'#FFF468',Priest:'#FFFFFF',Shaman:'#0070DD',Mage:'#3FC7EB',Warlock:'#8788EE',Druid:'#FF7C0A',DeathKnight:'#C41E3A',Monk:'#00FF98',DemonHunter:'#A330C9',Evoker:'#33937F'};
+const who=(name,cls)=>`<span style="color:${CLS[cls]||'#ccc'};font-weight:600">${esc(name)}</span>`;
+
+/* ---------- auth ---------- */
+const OAUTH='https://www.warcraftlogs.com/oauth';
+const redirectUri=()=>location.origin+location.pathname;
+const CFG=(()=>{try{return JSON.parse(document.getElementById('cfg')?.textContent||'null')}catch{return null}})();
+const builtin=()=>CFG?.t&&(!CFG.exp||CFG.exp>Date.now())?{t:CFG.t,api:'client',exp:CFG.exp,builtin:true}:null;
+const myTok=()=>{try{const t=JSON.parse(ls.get('wcl_tok'));return t&&(!t.exp||t.exp>Date.now())?t:null}catch{return null}};
+const getTok=()=>myTok()||builtin();
+const setTok=(t,api,sec)=>{ls.set('wcl_tok',JSON.stringify({t,api,exp:sec?Date.now()+sec*1000:0}));authUI()};
+function authUI(){const t=getTok();
+  $('#authPill').textContent=t?(t.builtin?'built-in access':'API connected'):(CFG?'built-in access expired':'not signed in');
+  $('#authPill').className='pill'+(t?' ok':'');
+  const m=myTok();$('#bake').disabled=!(m&&m.api==='client');
+  $('#bakeNote').textContent=m?.api==='client'?(m.exp?'Token valid until '+new Date(m.exp).toLocaleDateString():'Paste the whole JSON reply to also record the expiry date.'):'Needs an option B token (sign-in tokens give account access and are never built in).';}
+async function login(){
+  const cid=$('#cid').value.trim();if(!cid)return msg('Enter your Client ID.',1);
+  ls.set('wcl_cid',cid);
+  const v=b64u(crypto.getRandomValues(new Uint8Array(32)));
+  const ch=b64u(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(v))));
+  const st=b64u(crypto.getRandomValues(new Uint8Array(12)));
+  ls.set('wcl_pkce',JSON.stringify({v,st,hash:location.hash}));
+  location.href=OAUTH+'/authorize?'+new URLSearchParams({client_id:cid,code_challenge:ch,code_challenge_method:'S256',state:st,redirect_uri:redirectUri(),response_type:'code'});
+}
+async function finishLogin(){
+  const p=new URLSearchParams(location.search),code=p.get('code');if(!code)return;
+  const sv=JSON.parse(ls.get('wcl_pkce')||'null');ls.set('wcl_pkce',null);
+  history.replaceState(null,'',redirectUri()+(sv?.hash||''));
+  if(!sv||sv.st!==p.get('state'))return msg('Sign-in state mismatch, try again.',1);
+  const r=await fetch(OAUTH+'/token',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},
+    body:new URLSearchParams({grant_type:'authorization_code',client_id:ls.get('wcl_cid'),code_verifier:sv.v,redirect_uri:redirectUri(),code})});
+  const j=await r.json().catch(()=>({}));
+  if(!j.access_token)return msg('Sign-in failed: '+(j.error_description||j.error||r.status),1);
+  setTok(j.access_token,'user',j.expires_in);msg('Signed in.');
+}
+
+/* ---------- api ---------- */
+const S={view:false,host:'fresh',code:'',filter:'Encounters',report:null,data:null,per:{},players:[],tab:'overview',cache:new Map()};
+async function gql(query,variables){
+  const t=getTok();if(!t){$('#auth').hidden=false;throw new Error(CFG?'The built-in access on this page has expired. Ask whoever shared it for a fresh copy, or connect your own API access.':'Connect API access first (top right).')}
+  const r=await fetch(`https://${S.host}.warcraftlogs.com/api/v2/${t.api}`,{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+t.t},body:JSON.stringify({query,variables})});
+  if(r.status===401){if(t.builtin)throw new Error('The built-in access on this page has expired. Ask whoever shared it for a fresh copy, or connect your own API access.');ls.set('wcl_tok',null);authUI();throw new Error('Token rejected or expired, connect again.')}
+  if(r.status===429)throw new Error('Warcraft Logs rate limit hit, wait a bit and retry.');
+  const j=await r.json();if(j.errors?.length)throw new Error(j.errors.map(e=>e.message).join('; '));
+  return j.data.reportData.report;
+}
+const Q_REPORT=`query($c:String!){reportData{report(code:$c){title startTime endTime zone{name} owner{name} guild{name}
+ fights{id name encounterID kill startTime endTime difficulty fightPercentage size}
+ masterData{actors(type:"Player"){id name subType server}}}}}`;
+function args(){
+  const end=Math.max(0,...S.report.fights.map(f=>f.endTime));
+  return `startTime:0,endTime:${end},`+(/^\d+$/.test(S.filter)?`fightIDs:[${S.filter}]`:`killType:${S.filter}`);
+}
+
+/* ---------- input / share ---------- */
+function parseInput(s){
+  s=s.trim();
+  if(s.startsWith('CLA1.')){try{const o=JSON.parse(atob(s.slice(5).replace(/-/g,'+').replace(/_/g,'/')));return{host:o.h,code:o.r,filter:o.f}}catch{return null}}
+  const m=s.match(/(?:https?:\/\/)?(\w+)\.warcraftlogs\.com\/reports\/([A-Za-z0-9]+)(?:.*?fight=(\d+|last))?/);
+  if(m)return{host:m[1],code:m[2],filter:m[3]&&m[3]!=='last'?m[3]:null};
+  if(/^[A-Za-z0-9]{10,20}$/.test(s))return{host:S.host,code:s,filter:null};
+  return null;
+}
+const shareCode=()=>'CLA1.'+btoa(JSON.stringify({h:S.host,r:S.code,f:S.filter})).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+function syncHash(){if(!S.view)history.replaceState(null,'','#'+shareCode())}
+
+async function loadReport(){
+  const raw=$('#q').value.trim();
+  if(raw.startsWith('CLA2.')){try{return openSnapshot(await unpack(raw))}catch{return msg('That view-only code is damaged or incomplete.',1)}}
+  const p=parseInput(raw);if(!p)return msg('Paste a warcraftlogs report link, code, or CLA1 share code.',1);
+  Object.assign(S,{host:p.host||'fresh',code:p.code,filter:p.filter||'Encounters',per:{},data:null});
+  S.view=false;$('#filter').disabled=false;authUI();
+  msg('Loading report…');
+  try{S.report=await gql(Q_REPORT,{c:S.code})}catch(e){return msg(e.message,1)}
+  if(!S.report)return msg('Report not found (is it private?).',1);
+  const f=$('#filter'),bosses=S.report.fights.filter(x=>x.encounterID>0);
+  f.innerHTML=`<option value="Kills">Boss kills</option><option value="Encounters">All boss pulls</option><option value="All">Everything (incl. trash)</option>`+
+    bosses.map(x=>`<option value="${x.id}">#${x.id} ${esc(x.name)} · ${x.kill?'kill':'wipe '+((x.fightPercentage||0)/100).toFixed(1)+'%'} · ${dur(x.endTime-x.startTime)}</option>`).join('');
+  f.value=S.filter;if(f.value!==S.filter){S.filter='Encounters';f.value='Encounters'}
+  $('#ctrl').hidden=false;
+  await loadData();
+}
+
+async function loadData(){
+  syncHash();
+  const key=S.host+S.code+S.filter;
+  if(S.cache.has(key)){({data:S.data,per:S.per}=S.cache.get(key));buildPlayers();$('#view').hidden=false;msg('');return render()}
+  msg('Fetching tables…');
+  const A=args();
+  try{
+    S.data=await gql(`query($c:String!){reportData{report(code:$c){
+      dmg:table(dataType:DamageDone,${A}) heal:table(dataType:Healing,${A}) taken:table(dataType:DamageTaken,${A})
+      deaths:table(dataType:Deaths,${A}) ints:table(dataType:Interrupts,${A}) disp:table(dataType:Dispels,${A})
+      pd:playerDetails(${A})}}}`,{c:S.code});
+  }catch(e){return msg(e.message,1)}
+  S.per={};buildPlayers();$('#view').hidden=false;render();
+  const ids=S.players.map(p=>p.id);
+  for(let i=0;i<ids.length;i+=8){
+    msg(`Fetching buffs & casts… ${Math.min(i+8,ids.length)}/${ids.length}`);
+    const part=ids.slice(i,i+8).map(id=>`b${id}:table(dataType:Buffs,sourceID:${id},${A}) c${id}:table(dataType:Casts,sourceID:${id},${A})`).join(' ');
+    try{const r=await gql(`query($c:String!){reportData{report(code:$c){${part}}}}`,{c:S.code});
+      for(const id of ids.slice(i,i+8))S.per[id]={buffs:r['b'+id]?.data||{},casts:r['c'+id]?.data||{}};
+    }catch(e){return msg(e.message,1)}
+    if(S.tab==='consumes')render();
+  }
+  S.cache.set(key,{data:S.data,per:S.per});
+  msg('');if(S.tab==='consumes')render();
+}
+
+/* ---------- shaping ---------- */
+const T=x=>x?.data||{};
+function tally(n,o={}){
+  if(Array.isArray(n))n.forEach(x=>tally(x,o));
+  else if(n&&typeof n==='object'){
+    if(Array.isArray(n.details))n.details.forEach(d=>{o[d.name]=(o[d.name]||0)+(d.total||0)});
+    else if(n.entries)tally(n.entries,o);
+  }return o;
+}
+function buildPlayers(){
+  const d=S.data,actors=new Map(S.report.masterData.actors.map(a=>[a.id,a])),P=new Map();
+  const add=(id,name,cls)=>{if(!P.has(id))P.set(id,{id,name,cls:cls||actors.get(id)?.subType,role:'dps',spec:'',dmg:0,dps:0,heal:0,hps:0,taken:0,deaths:0,ints:0,disp:0});return P.get(id)};
+  const pd=T(d.pd).playerDetails||d.pd?.playerDetails||{};
+  for(const [role,k] of [['tank','tanks'],['healer','healers'],['dps','dps']])
+    for(const p of pd[k]||[]){const o=add(p.id,p.name,p.type);o.role=role;const s=p.specs?.[0];o.spec=s?.spec||(typeof s==='string'?s:'')}
+  const each=(tb,fn)=>{const t=T(tb),sec=(t.totalTime||1)/1000;for(const e of t.entries||[])if(actors.has(e.id))fn(add(e.id,e.name,e.type),e,sec)};
+  each(d.dmg,(o,e,s)=>{o.dmg=e.total;o.dps=e.total/s});
+  each(d.heal,(o,e,s)=>{o.heal=e.total;o.hps=e.total/s});
+  each(d.taken,(o,e)=>{o.taken=e.total});
+  for(const e of T(d.deaths).entries||[])if(P.has(e.id))P.get(e.id).deaths++;
+  const byName=new Map([...P.values()].map(p=>[p.name,p]));
+  for(const [n,v] of Object.entries(tally(T(d.ints).entries)))if(byName.has(n))byName.get(n).ints+=v;
+  for(const [n,v] of Object.entries(tally(T(d.disp).entries)))if(byName.has(n))byName.get(n).disp+=v;
+  S.players=[...P.values()];
+}
+
+const CAT=[
+  ['World buffs',/rallying cry|dragonslayer|spirit of zandalar|warchief'?s blessing|songflower|fengus|mol'dar|slip'kik|sayge|fortune of|boon of blackfathom|spark of inspiration|fervor of the temple|might of stormwind/i,'count'],
+  ['Flask',/flask|supreme power|distilled wisdom|chromatic resistance/i],
+  ['Elixirs',/elixir|mongoose|giants|firepower|shadow power|frost power|greater agility|greater intellect|major mana|zanza|firewater|rage of ages|scorpok|spiritual domination|infallible mind|major defense|greater armor/i],
+  ['Food',/well fed|increased stamina|increased intellect|increased agility|mana regeneration|nightfin|sagefish|dirge|sunfruit|tender wolf|grilled squid|runn tum|gordok green grog|rumsey rum/i],
+  ['Juju & misc',/juju|gift of arthas|cerebral cortex|r\.o\.i\.d\.s|lung juice|crystal (ward|force)/i],
+  ['Protection',/(fire|frost|shadow|nature|arcane|holy) protection|free action|living action/i],
+];
+const CASTS=[['Potions & runes',/potion|restore mana|healing|dark rune|demonic rune|healthstone|stoneshield|invulnerability|mighty rage|great rage|swiftness|restoration|free action|living action/i],
+  ['Engineering',/sapper|dynamite|grenade|reflector|bomb|explosive|iron grenade/i]];
+function consumes(p){
+  const r=S.per[p.id];if(!r)return null;
+  const tt=r.buffs.totalTime||1,auras=(r.buffs.auras||[]).map(a=>({name:a.name,up:Math.min(1,(a.totalUptime||0)/tt),uses:a.totalUses||0}));
+  const out={all:auras.sort((a,b)=>b.up-a.up),cats:{},casts:{},castList:[]};
+  for(const [n,re,mode] of CAT){const m=auras.filter(a=>re.test(a.name));out.cats[n]={mode,list:m,v:mode==='count'?m.length:Math.max(0,...m.map(a=>a.up))}}
+  const ce=(r.casts.entries||[]).filter(e=>e.name&&e.total);
+  for(const [n,re] of CASTS){const m=ce.filter(e=>re.test(e.name));out.casts[n]={list:m,v:m.reduce((s,e)=>s+e.total,0)};out.castList.push(...m)}
+  return out;
+}
+
+/* ---------- view-only snapshots ---------- */
+function snapshot(){
+  const D=S.data,R=S.report;
+  const ent=t=>({data:{totalTime:T(t).totalTime,entries:(T(t).entries||[]).map(e=>({id:e.id,name:e.name,type:e.type,total:e.total}))}});
+  const tl=t=>({data:{entries:[{details:Object.entries(tally(T(t).entries)).map(([name,total])=>({name,total}))}]}});
+  const pd=T(D.pd).playerDetails||D.pd?.playerDetails||{};
+  const sp=a=>(a||[]).map(p=>({id:p.id,name:p.name,type:p.type,specs:(p.specs||[]).slice(0,1).map(x=>({spec:x?.spec||x}))}));
+  return{v:2,host:S.host,code:S.code,filter:S.filter,label:$('#filter').selectedOptions[0]?.textContent||S.filter,
+    report:{title:R.title,startTime:R.startTime,endTime:R.endTime,zone:R.zone,owner:R.owner,guild:R.guild,
+      fights:R.fights.map(f=>({id:f.id,name:f.name,encounterID:f.encounterID,kill:f.kill,startTime:f.startTime,endTime:f.endTime,fightPercentage:f.fightPercentage})),
+      masterData:{actors:R.masterData.actors.map(a=>({id:a.id,name:a.name,subType:a.subType}))}},
+    data:{dmg:ent(D.dmg),heal:ent(D.heal),taken:ent(D.taken),ints:tl(D.ints),disp:tl(D.disp),
+      deaths:{data:{entries:(T(D.deaths).entries||[]).map(e=>({id:e.id,name:e.name,type:e.type,timestamp:e.timestamp,fight:e.fight,killingBlow:{name:e.killingBlow?.name,sourceName:e.killingBlow?.sourceName||e.source?.name}}))}},
+      pd:{data:{playerDetails:{tanks:sp(pd.tanks),healers:sp(pd.healers),dps:sp(pd.dps)}}}},
+    per:Object.fromEntries(Object.entries(S.per).map(([id,r])=>[id,{buffs:{totalTime:r.buffs.totalTime,auras:(r.buffs.auras||[]).map(a=>({name:a.name,totalUptime:a.totalUptime,totalUses:a.totalUses}))},
+      casts:{entries:(r.casts.entries||[]).filter(e=>e.name&&e.total).map(e=>({name:e.name,total:e.total}))}}]))};
+}
+function openSnapshot(o){
+  if(!o?.report)return msg('Not a CLA snapshot.',1);
+  Object.assign(S,{view:true,host:o.host,code:o.code,filter:o.filter,report:o.report,data:o.data||o.tables,per:o.per||o.perPlayer||{}});
+  const f=$('#filter');f.innerHTML=`<option>${esc(o.label||o.filter)}</option>`;f.disabled=true;
+  $('#ctrl').hidden=false;$('#auth').hidden=true;
+  $('#authPill').textContent='view-only snapshot';$('#authPill').className='pill';
+  buildPlayers();$('#view').hidden=false;render();
+  msg('Viewing a saved snapshot, no login needed. Load the report with API access to change the selection.');
+}
+const ready=()=>S.view||S.cache.has(S.host+S.code+S.filter)||(msg('Wait until buffs & casts finish loading.',1),false);
+async function viewLink(){
+  if(!ready())return;const c=await pack(snapshot()),kb=(c.length/1024).toFixed(0);
+  const out=/^https?:/.test(location.protocol)?redirectUri()+'#'+c:c;
+  try{await navigator.clipboard.writeText(out);msg(`View-only ${out===c?'code':'link'} copied (${kb} KB).`+(out===c?' Paste it into this page\'s box to view.':''))}
+  catch{$('#q').value=out;msg('Copy it from the box above.')}
+}
+async function viewPage(){
+  if(!ready())return;const c=await pack(snapshot());
+  const html=SRC.replace('</head>',`<script type="application/json" id="snap">${c}<\/script></head>`);
+  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([html],{type:'text/html'}));
+  a.download=`${S.code}-${String(S.filter).toLowerCase()}-view.html`;a.click();msg('Saved. Anyone can open that file to view this data.');
+}
+
+/* ---------- table ---------- */
+function table(el,cols,rows,{sort,expand,onRow}={}){
+  let sk=sort||cols.find(c=>c.n)?.k,asc=false,open=new Set();
+  const max={};cols.filter(c=>c.bar).forEach(c=>max[c.k]=Math.max(1,...rows.map(r=>+r[c.k]||0)));
+  const draw=()=>{
+    const rs=[...rows].sort((a,b)=>{const x=a[sk],y=b[sk];const v=typeof x==='string'?String(x).localeCompare(y):(x||0)-(y||0);return asc?v:-v});
+    el.innerHTML=`<div class="tw"><table><thead><tr>${cols.map(c=>`<th data-k="${c.k}" class="${c.n?'n':''} ${c.k===sk?'s'+(asc?' asc':''):''}">${c.l}</th>`).join('')}</tr></thead><tbody>${
+      rs.map(r=>{const id=r.id??r.key;return `<tr class="${expand?'click':''}" data-id="${id}">${cols.map(c=>{const v=c.f?c.f(r[c.k],r):esc(r[c.k]);
+        return c.bar?`<td class="n bar"><i style="width:${(r[c.k]||0)/max[c.k]*100}%"></i><em>${v}</em></td>`:`<td class="${c.n?'n':''}">${v}</td>`}).join('')}</tr>`+
+        (expand&&open.has(String(id))?`<tr class="sub"><td colspan="${cols.length}">${expand(r)}</td></tr>`:'')}).join('')}</tbody></table></div>`;
+    el.querySelectorAll('th').forEach(th=>th.onclick=()=>{const k=th.dataset.k;asc=k===sk?!asc:typeof rows[0]?.[k]==='string';sk=k;draw()});
+    if(onRow)el.querySelectorAll('tbody tr').forEach(tr=>{tr.className='click';tr.title='Show this pull';tr.onclick=()=>onRow(tr.dataset.id)});
+    if(expand)el.querySelectorAll('tr.click').forEach(tr=>tr.onclick=()=>{const i=tr.dataset.id;open.has(i)?open.delete(i):open.add(i);draw()});
+  };draw();
+}
+const roleOrder={tank:0,healer:1,dps:2},roleName={tank:'Tanks',healer:'Healers',dps:'Damage'};
+const pcls=(v)=>v>=.9?'g':v>=.5?'m':v>0?'l':'z';
+const nameCol={k:'name',l:'Player',f:(v,r)=>who(v,r.cls)};
+const specCol={k:'spec',l:'Spec',f:(v,r)=>`<span class="muted">${esc(v||r.cls||'')}</span>`};
+
+/* ---------- views ---------- */
+function render(){
+  const o=$('#out');o.innerHTML='';
+  document.querySelectorAll('#tabs button').forEach(b=>b.classList.toggle('on',b.dataset.t===S.tab));
+  ({overview,players,consumes:consView,deaths:deathView})[S.tab](o);
+}
+function overview(o){
+  const R=S.report,F=R.fights.filter(f=>f.encounterID>0),dt=T(S.data.deaths).entries||[];
+  const kills=F.filter(f=>f.kill).length,raidDps=S.players.reduce((s,p)=>s+p.dps,0);
+  o.innerHTML=`<div class="card"><div style="font-size:17px;font-weight:600">${esc(R.title)}</div>
+   <div class="muted small">${esc(R.zone?.name||'')} · ${esc(R.guild?.name||R.owner?.name||'')} · ${new Date(R.startTime).toLocaleString()} · ${dur(R.endTime-R.startTime)} total</div>
+   <div class="stats">
+    <div class="stat"><b class="g">${kills}</b><span>Boss kills</span></div>
+    <div class="stat"><b class="${F.length-kills?'l':''}">${F.length-kills}</b><span>Wipes</span></div>
+    <div class="stat"><b>${dt.length}</b><span>Deaths (filter)</span></div>
+    <div class="stat"><b>${fmt(raidDps)}</b><span>Raid DPS (filter)</span></div>
+    <div class="stat"><b>${S.players.length}</b><span>Players</span></div>
+   </div></div><h3>Boss pulls</h3><div class="card" id="ft"></div>`;
+  const dpf={};dt.forEach(e=>dpf[e.fight]=(dpf[e.fight]||0)+1);
+  table($('#ft'),[{k:'id',l:'#',n:1},{k:'name',l:'Boss'},{k:'res',l:'Result',f:(v,r)=>r.kill?'<span class="g">Kill</span>':`<span class="b">Wipe</span> <span class="muted">${v}</span>`},
+    {k:'len',l:'Duration',n:1,f:dur},{k:'deaths',l:'Deaths',n:1}],
+    F.map(f=>({id:f.id,name:f.name,kill:f.kill,res:f.kill?'':((f.fightPercentage||0)/100).toFixed(1)+'%',len:f.endTime-f.startTime,deaths:dpf[f.id]||0})),{sort:'id',onRow:id=>{if(S.view)return msg('A snapshot is fixed to one selection.',1);S.filter=id;$('#filter').value=id;loadData()}});
+  o.insertAdjacentHTML('beforeend','<p class="small muted">Click a pull to focus every tab on it.</p>');
+}
+function players(o){
+  for(const role of ['tank','healer','dps']){
+    const rows=S.players.filter(p=>p.role===role);if(!rows.length)continue;
+    o.insertAdjacentHTML('beforeend',`<h3>${roleName[role]} · ${rows.length}</h3><div class="card"></div>`);
+    table(o.lastElementChild,[nameCol,specCol,
+      {k:role==='healer'?'hps':'dps',l:role==='healer'?'HPS':'DPS',n:1,bar:1,f:fmt},{k:'dmg',l:'Damage',n:1,f:fmt},{k:'heal',l:'Healing',n:1,f:fmt},
+      {k:'taken',l:'Taken',n:1,f:fmt},{k:'deaths',l:'Deaths',n:1,f:v=>v?`<span class="b">${v}</span>`:'<span class="z">0</span>'},
+      {k:'ints',l:'Interrupts',n:1,f:v=>v||'<span class="z">0</span>'},{k:'disp',l:'Dispels',n:1,f:v=>v||'<span class="z">0</span>'}],rows);
+  }
+}
+function consView(o){
+  const done=S.players.filter(p=>S.per[p.id]).length;
+  if(done<S.players.length)o.insertAdjacentHTML('beforeend',`<p class="muted small">Loading ${done}/${S.players.length} players…</p>`);
+  const rows=S.players.filter(p=>S.per[p.id]).map(p=>{const c=consumes(p),r={...p,ro:roleOrder[p.role],c};
+    CAT.forEach(([n])=>r[n]=c.cats[n].v);CASTS.forEach(([n])=>r[n]=c.casts[n].v);return r});
+  if(!rows.length)return;
+  const cell=n=>(v,r)=>{const x=r.c.cats[n],t=esc(x.list.map(a=>`${a.name} ${pct(a.up)}`).join('\n'));
+    return x.mode==='count'?`<span title="${t}" class="${v>=3?'g':v?'m':'z'}">${v}</span>`:`<span title="${t}" class="${pcls(v)}">${v?pct(v):'–'}</span>`};
+  o.insertAdjacentHTML('beforeend','<div class="card"></div>');
+  table(o.lastElementChild,[nameCol,{k:'ro',l:'Role',n:0,f:(v,r)=>`<span class="muted">${roleName[r.role]}</span>`},
+    ...CAT.map(([n])=>({k:n,l:n,n:1,f:cell(n)})),...CASTS.map(([n])=>({k:n,l:n,n:1,f:v=>v||'<span class="z">0</span>'}))],
+    rows,{sort:'World buffs',expand:r=>`<div class="grid2"><div><b class="small">All buffs (uptime · uses)</b><div class="chips" style="margin-top:6px">${
+      r.c.all.map(a=>`<span class="chip"><span class="${pcls(a.up)}">${pct(a.up)}</span> ${esc(a.name)} <span class="muted">×${a.uses}</span></span>`).join('')||'<span class="muted">none</span>'}</div></div>
+      <div><b class="small">Consumable casts</b><div class="chips" style="margin-top:6px">${
+      r.c.castList.map(e=>`<span class="chip">${esc(e.name)} <span class="muted">×${e.total}</span></span>`).join('')||'<span class="muted">none</span>'}</div></div></div>`});
+  o.insertAdjacentHTML('beforeend','<p class="small muted">Uptime is over the selected fights. Hover a cell for buff names, click a row for everything that player had.</p>');
+}
+function deathView(o){
+  const dt=T(S.data.deaths).entries||[],fights=new Map(S.report.fights.map(f=>[f.id,f])),byId=new Map(S.players.map(p=>[p.id,p]));
+  if(!dt.length)return o.innerHTML='<div class="card muted">No deaths in this selection. 🎉</div>';
+  const g={};dt.forEach(e=>(g[e.fight]=g[e.fight]||[]).push(e));
+  for(const [fid,list] of Object.entries(g)){
+    const f=fights.get(+fid);
+    o.insertAdjacentHTML('beforeend',`<h3>${esc(f?.name||'Fight '+fid)} · #${fid} ${f?.kill?'<span class="g">kill</span>':'<span class="b">wipe</span>'} · ${list.length}</h3><div class="card"></div>`);
+    table(o.lastElementChild,[{k:'t',l:'Time',n:1,f:dur},{k:'name',l:'Player',f:(v,r)=>who(v,r.cls)},{k:'kb',l:'Killing blow'},{k:'src',l:'By',f:v=>`<span class="muted">${esc(v)}</span>`}],
+      list.map((e,i)=>({key:fid+'-'+i,t:e.timestamp-(f?.startTime||0),name:e.name,cls:byId.get(e.id)?.cls||e.type,kb:e.killingBlow?.name||'?',src:e.killingBlow?.sourceName||e.source?.name||''})),{sort:'t'});
+    o.lastElementChild.querySelector('th.s')?.click();
+  }
+}
+
+/* ---------- wiring ---------- */
+$('#authBtn').onclick=()=>$('#auth').hidden=!$('#auth').hidden;
+$('#loginBtn').onclick=login;
+$('#tokBtn').onclick=()=>{let t=$('#tok').value.trim(),ex=0;if(!t)return;if(t.startsWith('{')){try{const j=JSON.parse(t);t=j.access_token;ex=j.expires_in||0}catch{}}if(!t)return msg('No access_token found in that.',1);setTok(t,'client',ex);$('#tok').value='';$('#auth').hidden=true;msg('Token saved.')};
+$('#logout').onclick=e=>{e.preventDefault();ls.set('wcl_tok',null);authUI();msg('Token forgotten.')};
+$('#go').onclick=loadReport;$('#q').onkeydown=e=>{if(e.key==='Enter')loadReport()};
+$('#filter').onchange=e=>{S.filter=e.target.value;loadData()};
+$('#tabs').onclick=e=>{const t=e.target.dataset?.t;if(t){S.tab=t;render()}};
+$('#share').onclick=async()=>{const c=shareCode();try{await navigator.clipboard.writeText(c);msg('Share code copied: '+c)}catch{msg(c)}};
+$('#bake').onclick=()=>{const m=myTok();if(!m||m.api!=='client')return;
+  const cfg=JSON.stringify({t:m.t,exp:m.exp||0}).replace(/</g,'\\u003c');
+  const html=SRC.replace('</head>',`<script type="application/json" id="cfg">${cfg}<\/script></head>`);
+  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([html],{type:'text/html'}));a.download='cla-rpb-shared.html';a.click();
+  msg('Saved cla-rpb-shared.html. Anyone with it can paste a report link and go.')};
+$('#vlink').onclick=viewLink;$('#vpage').onclick=viewPage;
+$('#openSnap').onclick=e=>{e.preventDefault();$('#snapFile').click()};
+$('#snapFile').onchange=async e=>{const f=e.target.files[0];if(!f)return;const t=(await f.text()).trim();try{openSnapshot(t.startsWith('CLA2.')?await unpack(t):JSON.parse(t))}catch{msg('Could not read that file.',1)}e.target.value=''};
+$('#raw').onclick=()=>{const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify({host:S.host,code:S.code,filter:S.filter,report:S.report,tables:S.data,perPlayer:S.per},null,1)],{type:'application/json'}));a.download=`${S.code}-${S.filter}.json`;a.click()};
+$('#redir').textContent=redirectUri();$('#cid').value=ls.get('wcl_cid')||'';
+if(location.protocol==='file:')$('#fileWarn').hidden=false;
+if(builtin())$('#q').placeholder='Paste a warcraftlogs report link';
+authUI();
+(async()=>{
+  const snap=document.getElementById('snap')?.textContent.trim();
+  const h=decodeURIComponent(location.hash.slice(1));
+  if(snap||h.startsWith('CLA2.')){try{return openSnapshot(await unpack(snap||h))}catch{msg('This view-only link is damaged or incomplete.',1)}}
+  try{await finishLogin()}catch(e){msg(e.message,1)}
+  if(!getTok())$('#auth').hidden=false;
+  if(h.startsWith('CLA1.')){$('#q').value=h;if(getTok())loadReport()}
+})();
+</script>
+</body>
+</html>
